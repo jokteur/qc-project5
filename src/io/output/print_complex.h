@@ -9,7 +9,6 @@
 template <typename T>
 struct fmt::formatter<T, std::enable_if_t<is_complex<T>(), char>> : fmt::formatter<typename T::value_type> {
     mutable std::string fmt_opt;
-
     constexpr auto parse(format_parse_context& ctx) {
         auto it = ctx.begin(), end = ctx.end();
         fmt_opt.clear();

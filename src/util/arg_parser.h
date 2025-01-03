@@ -50,6 +50,10 @@ struct Parser {
 
     Parser(const std::string& name, const std::string& version) : parser(name, version) {}
 
+    void print_help() {
+        std::cout << parser; 
+    }
+
     void parse_known_args(int argc, char** argv) {
         parser.parse_known_args(argc, argv);
         for (auto& arg : args_custom) {
@@ -133,6 +137,7 @@ struct Parser {
             argument_match();
         }
     }
+
 
     void add_argument(const std::string& name, const std::string& help, std::function<void(const std::string&)> action) {
         auto arg = _get_basic_arg(name, help);

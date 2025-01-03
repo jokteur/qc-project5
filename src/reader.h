@@ -34,7 +34,9 @@ Circuit read_circuit(const std::string& filename, bool verbose = true, bool skip
         if (skip_hadamard && gate.cycle == 0) {
             continue;
         }
+        circuit.depth = gate.cycle;
         circuit.gates.push_back(gate);
     }
+    circuit.depth--; // Last step is Hadamard, that is not counted towards depth
     return circuit;
 }

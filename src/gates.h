@@ -21,8 +21,8 @@ enum class GateType {
 struct Gate {
     GateType type;
     int target;
-    int cycle;
     int control = -1; // In case of single qubit gate, control is -1 and not used
+    int cycle;
 };
 
 std::string gate_to_text(GateType gate) {
@@ -68,7 +68,7 @@ GateType text_to_gate(const std::string& text) {
         return GateType::CX;
     if (text == "CZ" || text == "cz")
         return GateType::CZ;
-    
+
     throw std::runtime_error("Unknown gate: " + text);
 }
 
@@ -87,11 +87,13 @@ KOKKOS_INLINE_FUNCTION void t_gate(cmplx a0, cmplx a1, cmplx* new_w) {
      * We can rewrite T gate as:
      * T = diag(1, exp(-j * pi / 4)) = diag(1, 1/sqrt(2)*(1-i))
      *   = 1/sqrt(2) * diag(sqrt(2), (1-i))
-     * 
+     *
      * Now we can take 1/sqrt(2) in the sqrt_counter
      */
-    new_w[0] = Kokkos::sqrt(2) * a0 /* * 1.0 / Kokkkos::sqrt(2) */;
-    new_w[1] = a1 * (1 - j) /* * 1.0 / Kokkkos::sqrt(2) */;
+     new_w[0] = Kokkos::sqrt(2) * a0 /* * 1.0 / Kokkos::sqrt(2) */;
+     new_w[1] = a1 * (1 + j) /* * 1.0 / Kokkos::sqrt(2) */;
+    // new_w[0] = a0;
+    // new_w[1] = a1 * (1 + j) / Kokkos::sqrt(2);
 }
 
 KOKKOS_INLINE_FUNCTION void x_gate(cmplx a0, cmplx a1, cmplx* new_w) {
@@ -100,8 +102,8 @@ KOKKOS_INLINE_FUNCTION void x_gate(cmplx a0, cmplx a1, cmplx* new_w) {
 }
 KOKKOS_INLINE_FUNCTION void h_gate(cmplx a0, cmplx a1, cmplx* new_w) {
     // 1/2 is taken into account in sqrt_counter
-    new_w[0] = (a0 + a1) /* * 1.0 / Kokkkos::sqrt(2) */;
-    new_w[1] = (a0 - a1) /* * 1.0 / Kokkkos::sqrt(2) */;
+    new_w[0] = (a0 + a1) /* * 1.0 / Kokkos::sqrt(2) */;
+    new_w[1] = (a0 - a1) /* * 1.0 / Kokkos::sqrt(2) */;
 }
 
 KOKKOS_INLINE_FUNCTION void sqrt_x_gate(cmplx a0, cmplx a1, cmplx* new_w) {

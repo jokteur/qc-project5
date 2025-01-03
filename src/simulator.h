@@ -8,6 +8,7 @@
 
 struct Circuit {
     int num_qubits;
+    int depth;
     std::vector<Gate> gates;
 };
 
@@ -23,11 +24,24 @@ class SchrodingerSimulator {
         size_t w_size = 1ull << num_qubits;
         size_t gate_bitmask = (1ull << ((num_qubits - 1) - target));
         size_t offset_idx = 1ull << ((num_qubits - 1) - target);
+        size_t block_size = 1ull << (num_qubits - target);
         size_t idx[2] = { 0, 0 };
         size_t block_idx = 0;
 
         sqrt_counter += sqrt_add;
 
+        int num_threads = omp_get_num_threads();
+
+        // Kokkos::parallel_for(w_size, KOKKOS_LAMBDA(size_t block_idx) {
+        //     if ((block_idx & gate_bitmask) == 0) {
+        //         idx[0] = block_idx;
+        //         idx[1] = offset_idx + block_idx;
+        //         cmplx new_w[2];
+        //         gate_func(wave(idx[0]), wave(idx[1]), new_w);
+        //         wave(idx[0]) = new_w[0];
+        //         wave(idx[1]) = new_w[1];
+        //     }
+        // });
         while (block_idx < w_size) {
             if ((block_idx & gate_bitmask) == 0) {
                 idx[0] = block_idx;
@@ -84,10 +98,11 @@ public:
 
     void initialise_state(bool hadamard = false) {
         if (hadamard) {
-            Kokkos::parallel_for(wave.size(), KOKKOS_LAMBDA(size_t idx) {
+            double factor = 1. / Kokkos::pow(Kokkos::sqrt(2), circuit.num_qubits);
+            Kokkos::parallel_for(N, KOKKOS_LAMBDA(size_t idx) {
                 wave(idx) = 1.;
             });
-            sqrt_counter = N;
+            sqrt_counter = circuit.num_qubits;
         }
         else {
             // In case we are on GPU, we need to use parallel_for to access memory
@@ -137,13 +152,57 @@ public:
                     fmt::println(" {} on qubit {:<2}", gate_to_text(gate.type), gate.target);
                 else
                     fmt::println(" {} ctrl({:<2}) target({:<2})", gate_to_text(gate.type), gate.control, gate.target);
-                
+
             }
         }
+
+        Kokkos::parallel_for(N, KOKKOS_LAMBDA(size_t idx) {
+            wave(idx) /= Kokkos::pow(Kokkos::sqrt(2), sqrt_counter);
+        });
 
         if (verbose) {
             Kokkos::fence();
             fmt::println("Total time: {}", print_time(timer.seconds()));
         }
+
+    }
+
+    Kokkos::View<cmplx*> get_statevector() {
+        return wave;
+    }
+
+    Kokkos::View<cmplx*> get_probabilities() {
+        Kokkos::View<cmplx*> probs("probs", N);
+        Kokkos::parallel_for(N, KOKKOS_LAMBDA(size_t idx) {
+            probs(idx) = Kokkos::abs(wave(idx)*wave(idx));
+        });
+        return probs;
+    }
+
+    std::string print_statevector(int first_N = -1) {
+        Kokkos::fence();
+        std::string out;
+        for (size_t i = 0; i < N; ++i) {
+            out += fmt::format("{:0{}b}: {}\n", i, circuit.num_qubits, wave(i));
+            if (first_N > 0 && i >= first_N) {
+                out += fmt::format("...\n");
+                break;
+            }
+        }
+        return out;
+    }
+
+    std::string print_probabilities(int first_N = -1) {
+        Kokkos::fence();
+        std::string out;
+        Kokkos::View<cmplx*> probs = get_probabilities();
+        for (size_t i = 0; i < N; ++i) {
+            out += fmt::format("{:0{}b}: {}\n", i, circuit.num_qubits, probs(i));
+            if (first_N > 0 && i >= first_N) {
+                out += fmt::format("...\n");
+                break;
+            }
+        }
+        return out;
     }
 };

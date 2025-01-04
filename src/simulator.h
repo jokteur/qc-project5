@@ -121,17 +121,45 @@ class SchrodingerSimulator {
 
     void apply_CZ_gate(int ctrl, int target) {
         int num_qubits = circuit.num_qubits;
-        size_t w_size = 1ull << num_qubits;
-        size_t ctrl_bitmask = (1ull << ((num_qubits - 1) - ctrl));
-        size_t target_bitmask = (1ull << ((num_qubits - 1) - target));
+        size_t nthreads = 1ull << (num_qubits - 2);
+        size_t left = ctrl;
+        size_t right = target;
 
-        size_t cz_bitmask = ctrl_bitmask | target_bitmask;
-        size_t idx = cz_bitmask;
-        while (idx < w_size) {
-            wave(idx) *= -1.0;
-            idx++;
-            idx |= cz_bitmask;
+        // Convert from left-most significant to right-most significant
+        left = num_qubits - 1 - left;
+        right = num_qubits - 1 - right;
+        if (left < right) {
+            std::swap(left, right);
         }
+        size_t gap_size = left - right - 1;
+
+        size_t right_mask = (1ull << right) - 1;
+        size_t middle_mask = (1ull << gap_size) - 1;
+
+        Kokkos::parallel_for(nthreads, KOKKOS_LAMBDA(size_t i) {
+            size_t right_bits = i & right_mask;
+
+            // Discard the rightmost bit
+            size_t leftover = (i >> right);
+
+            size_t middle_bits = (leftover & middle_mask);
+
+            size_t left_bits = leftover >> gap_size;
+
+            size_t idx = (left_bits << 1) | 1;
+            idx = (idx << (gap_size)) | middle_bits;
+            idx = (idx << 1) | 1;
+            idx = (idx << right) | right_bits;
+
+            wave(idx) *= -1.0;
+        });
+
+        // size_t idx = cz_bitmask;
+        // while (idx < w_size) {
+        //     wave(idx) *= -1.0;
+        //     idx++;
+        //     idx |= cz_bitmask;
+        // }
     }
 
     void apply_CX_gate(int ctrl, int target) {

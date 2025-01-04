@@ -5,7 +5,6 @@
 
 #include <vector>
 
-
 struct Circuit {
     int num_qubits;
     int depth;
@@ -18,43 +17,106 @@ class SchrodingerSimulator {
     size_t N;
     Circuit circuit;
 
-    template<typename function>
+    /**
+     * Apply a 1-qubit gate to the wavefunction
+     *
+     * @param target The target qubit
+     * @param gate_func The function that applies the gate
+     * @param sqrt_add The number of square roots to add to the counter
+     *
+     * We want to multiply the wavefunction by the gate matrix. Let's
+     * say that we have the matrix G:
+     *    a b
+     *    c d
+     *
+     * When we apply the gate to a target k qubit, the following matrix is
+     * applied:
+     *
+     *      k - 1       k    n - k - 1
+     *  /           \   |   /         \
+     *  I x I x ... I x G x I x ... x I
+     *
+     * Let us take n = 3. Here are the three possible cases:
+     *
+     * I x I x G : target qubit 2, offset = 1
+     * ======================================
+     * a b . . . . . .  block 1
+     * c d . . . . . .  |
+     * . . a b . . . .  block 2
+     * . . c d . . . .  |
+     * . . . . a b . .  block 3
+     * . . . . c d . .  |
+     * . . . . . . a b  block 4
+     * . . . . . . c d  |
+     *
+     * thread_idx: 0, 1, 2, 3
+     * block_idx:  0, 2, 4, 6
+     *
+     *
+     * I x G x I : target qubit 1, offset = 2
+     * ======================================
+     * a . b . . . . .  block 1
+     * . a . b . . . .  |  block 2
+     * c . d . . . . .  |  |
+     * . c . d . . . .     |
+     * . . . . a . b .  block 3
+     * . . . . . a . b  |  block 4
+     * . . . . c . d .  |  |
+     * . . . . . c . d     |
+     *
+     * thread_idx: 0, 1, 2, 3
+     * block_idx:  0, 1, 4, 5
+     *
+     * G x I x I : target qubit 0, offset = 4
+     * ======================================
+     * a . . . b . . .  block 1
+     * . a . . . b . .  |  block 2
+     * . . a . . . b .  |  |  block 3
+     * . . . a . . . b  |  |  |  block 4
+     * c . . . d . . .  |  |  |  |
+     * . c . . . d . .     |  |  |
+     * . . c . . . d .        |  |
+     * . . . c . . . d           |
+     *
+     * thread_idx: 0, 1, 2, 3
+     * block_idx:  0, 1, 2, 3
+     *
+     * We just need to map the thread_idx to the block_idx and apply the gate
+     * to the block (a, b) and (c, d)
+     *
+     * The formula for block_idx is:
+     * block_idx = idx + offset * floor(idx / 2)
+     *           = 2 * thread_idx - (thread_idx % offset)
+     */
+    template <typename function>
     void apply_1Q_gate(int target, function& gate_func, int sqrt_add = 0) {
         int num_qubits = circuit.num_qubits;
-        size_t w_size = 1ull << num_qubits;
-        size_t gate_bitmask = (1ull << ((num_qubits - 1) - target));
-        size_t offset_idx = 1ull << ((num_qubits - 1) - target);
-        size_t block_size = 1ull << (num_qubits - target);
-        size_t idx[2] = { 0, 0 };
-        size_t block_idx = 0;
+        size_t nblocks = 1ull << num_qubits - 1;            // 2^(num_qubits - 1)
+        size_t offset = 1ull << ((num_qubits - 1) - target); // 2^(num_qubits - 1 - target)
 
         sqrt_counter += sqrt_add;
 
-        int num_threads = omp_get_num_threads();
+        Kokkos::parallel_for(nblocks, KOKKOS_LAMBDA(size_t i) {
+            size_t block_idx = 2 * i - (i % offset);
+            size_t idx[2] = { block_idx, block_idx + offset };
+            cmplx new_w[2];
+            gate_func(wave(idx[0]), wave(idx[1]), new_w);
+            wave(idx[0]) = new_w[0];
+            wave(idx[1]) = new_w[1];
+        });
+    }
 
-        // Kokkos::parallel_for(w_size, KOKKOS_LAMBDA(size_t block_idx) {
-        //     if ((block_idx & gate_bitmask) == 0) {
-        //         idx[0] = block_idx;
-        //         idx[1] = offset_idx + block_idx;
-        //         cmplx new_w[2];
-        //         gate_func(wave(idx[0]), wave(idx[1]), new_w);
-        //         wave(idx[0]) = new_w[0];
-        //         wave(idx[1]) = new_w[1];
-        //     }
-        // });
-        while (block_idx < w_size) {
-            if ((block_idx & gate_bitmask) == 0) {
-                idx[0] = block_idx;
-                idx[1] = offset_idx + block_idx;
-                cmplx new_w[2];
-                gate_func(wave(idx[0]), wave(idx[1]), new_w);
-                wave(idx[0]) = new_w[0];
-                wave(idx[1]) = new_w[1];
-                ++block_idx;
-            }
-            else
-                block_idx += (block_idx & gate_bitmask);
-        }
+    /** Optimised T gate */
+    void apply_T_gate(int target, int sqrt_add = 0) {
+        int num_qubits = circuit.num_qubits;
+        size_t nblocks = 1ull << num_qubits - 1;            // 2^(num_qubits - 1)
+        size_t offset = 1ull << ((num_qubits - 1) - target); // 2^(num_qubits - 1 - target)
+
+        Kokkos::parallel_for(nblocks, KOKKOS_LAMBDA(size_t i) {
+            size_t block_idx = 2 * i - (i % offset);
+            size_t idx[2] = { block_idx, block_idx + offset };
+            wave(idx[1]) = wave(idx[1]) * (1 + j) / Kokkos::sqrt(2);
+        });
     }
 
     void apply_CZ_gate(int ctrl, int target) {
@@ -89,9 +151,9 @@ class SchrodingerSimulator {
             idx |= cx_bitmask;
         }
     }
+
 public:
-    SchrodingerSimulator(const Circuit& circuit) :
-        circuit(circuit),
+    SchrodingerSimulator(const Circuit& circuit) : circuit(circuit),
         wave("wave", 1 << circuit.num_qubits),
         N(1 << circuit.num_qubits) {
     }
@@ -99,16 +161,12 @@ public:
     void initialise_state(bool hadamard = false) {
         if (hadamard) {
             double factor = 1. / Kokkos::pow(Kokkos::sqrt(2), circuit.num_qubits);
-            Kokkos::parallel_for(N, KOKKOS_LAMBDA(size_t idx) {
-                wave(idx) = 1.;
-            });
+            Kokkos::parallel_for(N, KOKKOS_LAMBDA(size_t idx) { wave(idx) = 1.; });
             sqrt_counter = circuit.num_qubits;
         }
         else {
             // In case we are on GPU, we need to use parallel_for to access memory
-            Kokkos::parallel_for(1, KOKKOS_LAMBDA(size_t) {
-                wave(0) = 1.;
-            });
+            Kokkos::parallel_for(1, KOKKOS_LAMBDA(size_t) { wave(0) = 1.; });
         }
     }
 
@@ -130,7 +188,7 @@ public:
                 apply_1Q_gate(gate.target, h_gate, 1);
                 break;
             case GateType::T:
-                apply_1Q_gate(gate.target, t_gate, 1);
+                apply_T_gate(gate.target, 1);
                 break;
             case GateType::SqrtX:
                 apply_1Q_gate(gate.target, sqrt_x_gate, 2);
@@ -152,19 +210,15 @@ public:
                     fmt::println(" {} on qubit {:<2}", gate_to_text(gate.type), gate.target);
                 else
                     fmt::println(" {} ctrl({:<2}) target({:<2})", gate_to_text(gate.type), gate.control, gate.target);
-
             }
         }
 
-        Kokkos::parallel_for(N, KOKKOS_LAMBDA(size_t idx) {
-            wave(idx) /= Kokkos::pow(Kokkos::sqrt(2), sqrt_counter);
-        });
+        Kokkos::parallel_for(N, KOKKOS_LAMBDA(size_t idx) { wave(idx) /= Kokkos::pow(Kokkos::sqrt(2), sqrt_counter); });
 
         if (verbose) {
             Kokkos::fence();
             fmt::println("Total time: {}", print_time(timer.seconds()));
         }
-
     }
 
     Kokkos::View<cmplx*> get_statevector() {
@@ -173,9 +227,7 @@ public:
 
     Kokkos::View<cmplx*> get_probabilities() {
         Kokkos::View<cmplx*> probs("probs", N);
-        Kokkos::parallel_for(N, KOKKOS_LAMBDA(size_t idx) {
-            probs(idx) = Kokkos::abs(wave(idx)*wave(idx));
-        });
+        Kokkos::parallel_for(N, KOKKOS_LAMBDA(size_t idx) { probs(idx) = Kokkos::abs(wave(idx) * wave(idx)); });
         return probs;
     }
 

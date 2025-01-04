@@ -33,17 +33,17 @@ int main(int argc, char* argv[]) {
 
     Kokkos::initialize(argc, argv);
     {
-        // Circuit circuit = read_circuit(args.circuit_file, args.verbose, true);
-        Circuit circuit;
-        circuit.num_qubits = 4;
-        circuit.push_back({GateType::T, 0, 2});
+        Circuit circuit = read_circuit(args.circuit_file, args.verbose, true);
+        // Circuit circuit;
+        // circuit.num_qubits = 4;
+        // circuit.gates.push_back({GateType::T, 2});
 
 
         SchrodingerSimulator simulator(circuit);
         simulator.initialise_state(true);
         simulator.run(args.verbose);
 
-        fmt::println("Statevector:\n{}", simulator.print_statevector(10));
+        fmt::println("Statevector:\n{}", simulator.print_statevector(20));
 
         if (!args.output_statevector.empty()) {
             std::ofstream out(args.output_statevector);

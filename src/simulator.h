@@ -11,7 +11,7 @@ struct Circuit {
     std::vector<Gate> gates;
 };
 
-class SchrodingerSimulator {
+struct SchrodingerSimulator {
     Kokkos::View<cmplx*> wave;
     size_t sqrt_counter = 0;
     size_t N;
@@ -88,23 +88,21 @@ class SchrodingerSimulator {
      * block_idx = idx + offset * floor(idx / 2)
      *           = 2 * thread_idx - (thread_idx % offset)
      */
-    template <typename function>
-    void apply_1Q_gate(int target, function& gate_func, int sqrt_add = 0) {
-        int num_qubits = circuit.num_qubits;
-        size_t nblocks = 1ull << num_qubits - 1;            // 2^(num_qubits - 1)
-        size_t offset = 1ull << ((num_qubits - 1) - target); // 2^(num_qubits - 1 - target)
-
-        sqrt_counter += sqrt_add;
-
-        Kokkos::parallel_for(nblocks, KOKKOS_LAMBDA(size_t i) {
-            size_t block_idx = 2 * i - (i % offset);
-            size_t idx[2] = { block_idx, block_idx + offset };
-            cmplx new_w[2];
-            gate_func(wave(idx[0]), wave(idx[1]), new_w);
-            wave(idx[0]) = new_w[0];
-            wave(idx[1]) = new_w[1];
-        });
-    }
+    // Because function pointers are difficult in CUDA, we need to use macros
+#define apply_1Q_gate(target, gate_func, sqrt_add) {         \
+        int num_qubits = circuit.num_qubits;                 \
+        size_t nblocks = 1ull << num_qubits - 1;             \
+        size_t offset = 1ull << ((num_qubits - 1) - target); \
+        sqrt_counter += sqrt_add;                            \
+        Kokkos::parallel_for(nblocks, KOKKOS_CLASS_LAMBDA(size_t i) { \
+            size_t block_idx = 2 * i - (i % offset);                  \
+            size_t idx[2] = { block_idx, block_idx + offset };        \
+            cmplx new_w[2];                                           \
+            gate_func(wave(idx[0]), wave(idx[1]), new_w);             \
+            wave(idx[0]) = new_w[0];                                  \
+            wave(idx[1]) = new_w[1];                                  \
+        });                                                           \
+    } 
 
     /** Optimised T gate */
     void apply_T_gate(int target, int sqrt_add = 0) {
@@ -112,7 +110,8 @@ class SchrodingerSimulator {
         size_t nblocks = 1ull << num_qubits - 1;            // 2^(num_qubits - 1)
         size_t offset = 1ull << ((num_qubits - 1) - target); // 2^(num_qubits - 1 - target)
 
-        Kokkos::parallel_for(nblocks, KOKKOS_LAMBDA(size_t i) {
+        cmplx j = cmplx(0, 1);
+        Kokkos::parallel_for(nblocks, KOKKOS_CLASS_LAMBDA(size_t i) {
             size_t block_idx = 2 * i - (i % offset);
             size_t idx[2] = { block_idx, block_idx + offset };
             wave(idx[1]) = wave(idx[1]) * (1 + j) / Kokkos::sqrt(2);
@@ -136,7 +135,7 @@ class SchrodingerSimulator {
         size_t right_mask = (1ull << right) - 1;
         size_t middle_mask = (1ull << gap_size) - 1;
 
-        Kokkos::parallel_for(nthreads, KOKKOS_LAMBDA(size_t i) {
+        Kokkos::parallel_for(nthreads, KOKKOS_CLASS_LAMBDA(size_t i) {
             size_t right_bits = i & right_mask;
 
             // Discard the rightmost bit
@@ -153,13 +152,6 @@ class SchrodingerSimulator {
 
             wave(idx) *= -1.0;
         });
-
-        // size_t idx = cz_bitmask;
-        // while (idx < w_size) {
-        //     wave(idx) *= -1.0;
-        //     idx++;
-        //     idx |= cz_bitmask;
-        // }
     }
 
     void apply_CX_gate(int ctrl, int target) {
@@ -180,7 +172,6 @@ class SchrodingerSimulator {
         }
     }
 
-public:
     SchrodingerSimulator(const Circuit& circuit) : circuit(circuit),
         wave("wave", 1 << circuit.num_qubits),
         N(1 << circuit.num_qubits) {
@@ -189,12 +180,12 @@ public:
     void initialise_state(bool hadamard = false) {
         if (hadamard) {
             double factor = 1. / Kokkos::pow(Kokkos::sqrt(2), circuit.num_qubits);
-            Kokkos::parallel_for(N, KOKKOS_LAMBDA(size_t idx) { wave(idx) = 1.; });
+            Kokkos::parallel_for(N, KOKKOS_CLASS_LAMBDA(size_t idx) { wave(idx) = 1.; });
             sqrt_counter = circuit.num_qubits;
         }
         else {
             // In case we are on GPU, we need to use parallel_for to access memory
-            Kokkos::parallel_for(1, KOKKOS_LAMBDA(size_t) { wave(0) = 1.; });
+            Kokkos::parallel_for(1, KOKKOS_CLASS_LAMBDA(size_t) { wave(0) = 1.; });
         }
     }
 
@@ -204,13 +195,13 @@ public:
             Kokkos::Timer gate_timer;
             switch (gate.type) {
             case GateType::X:
-                apply_1Q_gate(gate.target, x_gate);
+                apply_1Q_gate(gate.target, x_gate, 0);
                 break;
             case GateType::Y:
-                apply_1Q_gate(gate.target, y_gate);
+                apply_1Q_gate(gate.target, y_gate, 0);
                 break;
             case GateType::Z:
-                apply_1Q_gate(gate.target, z_gate);
+                apply_1Q_gate(gate.target, z_gate, 0);
                 break;
             case GateType::H:
                 apply_1Q_gate(gate.target, h_gate, 1);
@@ -241,7 +232,7 @@ public:
             }
         }
 
-        Kokkos::parallel_for(N, KOKKOS_LAMBDA(size_t idx) { wave(idx) /= Kokkos::pow(Kokkos::sqrt(2), sqrt_counter); });
+        Kokkos::parallel_for(N, KOKKOS_CLASS_LAMBDA(size_t idx) { wave(idx) /= Kokkos::pow(Kokkos::sqrt(2), sqrt_counter); });
 
         if (verbose) {
             Kokkos::fence();
@@ -255,15 +246,17 @@ public:
 
     Kokkos::View<cmplx*> get_probabilities() {
         Kokkos::View<cmplx*> probs("probs", N);
-        Kokkos::parallel_for(N, KOKKOS_LAMBDA(size_t idx) { probs(idx) = Kokkos::abs(wave(idx) * wave(idx)); });
+        Kokkos::parallel_for(N, KOKKOS_CLASS_LAMBDA(size_t idx) { probs(idx) = Kokkos::abs(wave(idx) * wave(idx)); });
         return probs;
     }
 
     std::string print_statevector(int first_N = -1) {
         Kokkos::fence();
         std::string out;
+        Kokkos::View<cmplx*, Kokkos::HostSpace> wave_host = Kokkos::create_mirror_view(wave);
+        Kokkos::deep_copy(wave_host, wave);
         for (size_t i = 0; i < N; ++i) {
-            out += fmt::format("{:0{}b}: {}\n", i, circuit.num_qubits, wave(i));
+            out += fmt::format("{:0{}b}: {}\n", i, circuit.num_qubits, wave_host(i));
             if (first_N > 0 && i >= first_N) {
                 out += fmt::format("...\n");
                 break;
@@ -276,6 +269,8 @@ public:
         Kokkos::fence();
         std::string out;
         Kokkos::View<cmplx*> probs = get_probabilities();
+        Kokkos::View<cmplx*, Kokkos::HostSpace> h_probs = Kokkos::create_mirror_view(probs);
+        Kokkos::deep_copy(h_probs, probs);
         for (size_t i = 0; i < N; ++i) {
             out += fmt::format("{:0{}b}: {}\n", i, circuit.num_qubits, probs(i));
             if (first_N > 0 && i >= first_N) {

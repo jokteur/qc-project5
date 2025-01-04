@@ -78,11 +78,13 @@ KOKKOS_INLINE_FUNCTION void z_gate(cmplx a0, cmplx a1, cmplx* new_w) {
 }
 
 KOKKOS_INLINE_FUNCTION void y_gate(cmplx a0, cmplx a1, cmplx* new_w) {
+    cmplx j = cmplx(0, 1);
     new_w[0] = -a1 * j;
     new_w[1] = a0 * j;
 }
 
 KOKKOS_INLINE_FUNCTION void t_gate(cmplx a0, cmplx a1, cmplx* new_w) {
+    cmplx j = cmplx(0, 1);
     /**
      * We can rewrite T gate as:
      * T = diag(1, exp(-j * pi / 4)) = diag(1, 1/sqrt(2)*(1-i))
@@ -105,12 +107,14 @@ KOKKOS_INLINE_FUNCTION void h_gate(cmplx a0, cmplx a1, cmplx* new_w) {
 }
 
 KOKKOS_INLINE_FUNCTION void sqrt_x_gate(cmplx a0, cmplx a1, cmplx* new_w) {
+    cmplx j = cmplx(0, 1);
     // 1/2 is taken into account in sqrt_counter
     new_w[0] = ((1 + j)*a0 + (1 - j)*a1) /* *0.5 */;
     new_w[1] = ((1 - j)*a0 + (1 + j)*a1) /* *0.5 */;
 }
 
 KOKKOS_INLINE_FUNCTION void sqrt_y_gate(cmplx a0, cmplx a1, cmplx* new_w) {
+    cmplx j = cmplx(0, 1);
     // 1/2 is taken into account in sqrt_counter
     new_w[0] = ((1 + j)*a0 - (1 + j)*a1) /* *0.5 */;
     new_w[1] = ((1 + j)*a0 + (1 + j)*a1) /* *0.5 */;

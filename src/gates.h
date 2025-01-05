@@ -96,6 +96,11 @@ KOKKOS_INLINE_FUNCTION void t_gate(cmplx a0, cmplx a1, cmplx* new_w) {
      new_w[1] = a1 * (1 + j) /* * 1.0 / Kokkos::sqrt(2) */;
 }
 
+KOKKOS_INLINE_FUNCTION void p0_gate(cmplx a0, cmplx a1, cmplx* new_w) {
+    new_w[0] = a0;
+    new_w[1] = a1;
+}
+
 KOKKOS_INLINE_FUNCTION void x_gate(cmplx a0, cmplx a1, cmplx* new_w) {
     new_w[0] = a1;
     new_w[1] = a0;

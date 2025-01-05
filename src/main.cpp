@@ -5,6 +5,7 @@
 
 #include "reader.h"
 #include "simulator.h"
+#include "feynman_simulator.h"
 
 struct Arguments {
     std::string circuit_file;
@@ -12,6 +13,8 @@ struct Arguments {
     std::string output_statevector;
     std::string output_probabilities;
     int nshots = 1000000;
+    int num_divisions = 1;
+    double fidelity = 1.0;
 };
 
 int main(int argc, char* argv[]) {
@@ -23,6 +26,8 @@ int main(int argc, char* argv[]) {
     arg_parser.add_argument("--output_statevector", "Output the whole statevector to file", args.output_statevector);
     arg_parser.add_argument("--nshots", "Number of shots", args.nshots);
     arg_parser.add_argument("--output_probabilities", "Output the probabilities to file", args.output_statevector);
+    arg_parser.add_argument("--feynman_paths", "Use the Feynman simulator (divide the circuit into n circuits)", args.num_divisions);
+    arg_parser.add_argument("--fidelity", "Fidelity of the Feynman simulator", args.fidelity);
     arg_parser.parse_known_args(argc, argv);
 
     if (args.circuit_file.empty()) {
@@ -35,19 +40,39 @@ int main(int argc, char* argv[]) {
     {
         Circuit circuit = read_circuit(args.circuit_file, args.verbose, true);
 
-        SchrodingerSimulator simulator(circuit);
-        simulator.initialise_state(true);
-        simulator.run(args.verbose);
+        // Schrodinger simulator
+        if (args.num_divisions == 1) {
+            SchrodingerSimulator simulator(circuit);
+            simulator.initialise_state(true);
+            simulator.run(args.verbose);
 
-        fmt::println("Statevector:\n{}", simulator.print_statevector(20));
+            fmt::println("Statevector:\n{}", simulator.print_statevector(20));
 
-        if (!args.output_statevector.empty()) {
-            std::ofstream out(args.output_statevector);
-            out << simulator.print_statevector();
+            if (!args.output_statevector.empty()) {
+                std::ofstream out(args.output_statevector);
+                out << simulator.print_statevector();
+            }
+            if (!args.output_probabilities.empty()) {
+                std::ofstream out(args.output_probabilities);
+                out << simulator.print_probabilities();
+            }
         }
-        if (!args.output_probabilities.empty()) {
-            std::ofstream out(args.output_probabilities);
-            out << simulator.print_probabilities();
+        // Feynman + Schrödinger simulator
+        else {
+            FeynmannSimulator simulator(circuit, args.num_divisions, args.fidelity);
+            // simulator.initialise_state(true);
+            // simulator.run(args.verbose);
+
+            // fmt::println("Statevector:\n{}", simulator.print_statevector(20));
+
+            // if (!args.output_statevector.empty()) {
+            //     std::ofstream out(args.output_statevector);
+            //     out << simulator.print_statevector();
+            // }
+            // if (!args.output_probabilities.empty()) {
+            //     std::ofstream out(args.output_probabilities);
+            //     out << simulator.print_probabilities();
+            // }
         }
     }
     Kokkos::finalize();

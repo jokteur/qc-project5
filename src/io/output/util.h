@@ -16,3 +16,20 @@ inline std::string print_time(float seconds) {
     }
     return out;
 }
+inline std::string print_filesize(size_t size) {
+    if (size < 1024UL) {
+        return fmt::format("{}B", size);
+    }
+    else if (size < 1024UL * 1024UL) {
+        return fmt::format("{:.1f}KB", (float)size / 1024.f);
+    }
+    else if (size < 1024UL * 1024UL * 1024UL) {
+        return fmt::format("{:.1f}MB", (float)size / (1024.f * 1024.f));
+    }
+    else if (size < 1024UL * 1024UL * 1024UL * 1024UL) {
+        return fmt::format("{:.1f}GB", (float)size / (1024.f * 1024.f * 1024.f));
+    }
+    else {
+        return fmt::format("{:.1f}TB", (float)size / (1024.f * 1024.f * 1024.f * 1024.f));
+    }
+}

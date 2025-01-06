@@ -11,6 +11,8 @@ enum class GateType {
     Z,
     H,
     T,
+    P0,
+    P1,
     SqrtX,
     SqrtY,
     CX,
@@ -37,6 +39,10 @@ std::string gate_to_text(GateType gate) {
         return "H";
     case GateType::T:
         return "T";
+    case GateType::P0:
+        return "P0";
+    case GateType::P1:
+        return "P1";
     case GateType::SqrtX:
         return "SqrtX";
     case GateType::SqrtY:
@@ -68,6 +74,10 @@ GateType text_to_gate(const std::string& text) {
         return GateType::CX;
     if (text == "CZ" || text == "cz")
         return GateType::CZ;
+    if (text == "P0" || text == "p0")
+        return GateType::P0;
+    if (text == "P1" || text == "p1")
+        return GateType::P1;
 
     throw std::runtime_error("Unknown gate: " + text);
 }
@@ -98,6 +108,10 @@ KOKKOS_INLINE_FUNCTION void t_gate(cmplx a0, cmplx a1, cmplx* new_w) {
 
 KOKKOS_INLINE_FUNCTION void p0_gate(cmplx a0, cmplx a1, cmplx* new_w) {
     new_w[0] = a0;
+    new_w[1] = 0;
+}
+KOKKOS_INLINE_FUNCTION void p1_gate(cmplx a0, cmplx a1, cmplx* new_w) {
+    new_w[0] = 0;
     new_w[1] = a1;
 }
 

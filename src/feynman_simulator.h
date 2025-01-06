@@ -86,14 +86,13 @@ struct FeynmanSimulator {
 
         N1 = 1ull << cut_idx;
         N2 = 1ull << (num_qubits - cut_idx);
-
-        Amplitude accumulator_wave_1("wave_1", N1);
-        Amplitude accumulator_wave_2("wave_2", N2);
     }
 
     void recursive_path(
         std::mt19937& rng,
         float fidelity,
+        const Kokkos::View<size_t*>& bitstrings,
+        Kokkos::View<cmplx*>& global_wave,
         SchrodingerSimulator& sim_1, SchrodingerSimulator& sim_2,
         int gate_idx, int level, int verbose
     ) {
@@ -111,7 +110,7 @@ struct FeynmanSimulator {
         bool is_target_in_1;
 
         for (int i = gate_idx;i < global_circuit.gates.size();i++) {
-            auto& gate = global_circuit.gates[i];
+            const auto& gate = global_circuit.gates[i];
             is_target_in_1 = gate.target < cut_idx;
             is_control_in_1 = gate.control < cut_idx;
             if (gate.control == -1) {
@@ -119,8 +118,9 @@ struct FeynmanSimulator {
                     sim_1.apply_gate(gate, false);
                 }
                 else {
-                    gate.target -= cut_idx;
-                    sim_2.apply_gate(gate, false);
+                    Gate new_gate = gate;
+                    new_gate.target -= cut_idx;
+                    sim_2.apply_gate(new_gate, false);
                 }
             }
             else {
@@ -130,17 +130,13 @@ struct FeynmanSimulator {
                 }
                 // CZ is in right cut
                 else if (!is_target_in_1 && !is_control_in_1) {
-                    gate.control -= cut_idx;
-                    gate.target -= cut_idx;
-                    sim_2.apply_gate(gate, false);
+                    Gate new_gate = gate;
+                    new_gate.control -= cut_idx;
+                    new_gate.target -= cut_idx;
+                    sim_2.apply_gate(new_gate, false);
                 }
                 // CZ is cross cut
                 else {
-                    if (verbose) {
-                        // fmt::print("{:{}}", "", level);
-                        // fmt::println("  Diverging path (level {}) at gate {} ctrl({:<2}) target({:<2})",
-                        //     level, gate_to_text(gate.type), gate.control, gate.target);
-                    }
                     diverging_idx = i;
                     break;
                 }
@@ -153,8 +149,14 @@ struct FeynmanSimulator {
             // Add the end of run, add the wave to the accumulator
             sim_1.normalise();
             sim_2.normalise();
+            Kokkos::parallel_for(bitstrings.extent(0), KOKKOS_CLASS_LAMBDA(size_t i) {
+                size_t idx = bitstrings(i);
+                auto ampl = get_amplitude(sim_1.wave, sim_2.wave, num_qubits, cut_idx, idx);
+                global_wave(i) += ampl;
+            });
             return;
         }
+
         // Otherwise, we have a diverging path
         auto sim_1_cpy = sim_1.copy();
         auto sim_2_cpy = sim_2.copy();
@@ -173,7 +175,7 @@ struct FeynmanSimulator {
             gate.target = gate_cpy.control - cut_idx;
             sim_2.apply_gate(gate, false);
         }
-        recursive_path(rng, fidelity, sim_1, sim_2, diverging_idx + 1, level + 1, verbose);
+        recursive_path(rng, fidelity, bitstrings, global_wave, sim_1, sim_2, diverging_idx + 1, level + 1, verbose);
         // Right path (replace the ctrl with P1 and target with Z)
         if (is_control_in_1) {
             Gate gate;
@@ -193,10 +195,10 @@ struct FeynmanSimulator {
             gate.target = gate_cpy.control - cut_idx;
             sim_2_cpy.apply_gate(gate, false);
         }
-        recursive_path(rng, fidelity, sim_1_cpy, sim_2_cpy, diverging_idx + 1, level + 1, verbose);
+        recursive_path(rng, fidelity, bitstrings, global_wave, sim_1_cpy, sim_2_cpy, diverging_idx + 1, level + 1, verbose);
     }
 
-    void run(float fidelity, int verbose = true) {
+    Kokkos::View<cmplx*> run(const Kokkos::View<size_t*>& bitstrings, float fidelity, int verbose = true) {
         std::random_device dev;
         std::mt19937 rng(dev());
 
@@ -214,12 +216,16 @@ struct FeynmanSimulator {
         simulator_2.initialise_state(true);
 
         counter = 0;
-        recursive_path(rng, fidelity, simulator_1, simulator_2, 0, 0, verbose);
+
+        Kokkos::View<cmplx*> global_wave("global_wave", bitstrings.size());
+
+        recursive_path(rng, fidelity, bitstrings, global_wave, simulator_1, simulator_2, 0, 0, verbose);
 
         if (verbose) {
             Kokkos::fence();
             fmt::println("Total time: {}", print_time(timer.seconds()));
         }
+        return global_wave;
     }
 
     Kokkos::View<cmplx*> run_flat(const Kokkos::View<size_t*>& bitstrings, float fidelity, int verbose = true) {

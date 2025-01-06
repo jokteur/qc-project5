@@ -19,6 +19,7 @@ struct Arguments {
     bool use_rejection = true;
     int cut_at = -1;
     double fidelity = 1.0;
+    int recursive = 0;
     size_t max_memory = 16; // in GB
 };
 
@@ -37,6 +38,7 @@ int main(int argc, char* argv[]) {
     arg_parser.add_argument("--use_rejection", "Use rejection sampling", args.use_rejection);
     arg_parser.add_argument("--epsilon", "Epsilon for fidelity of sampling", args.epsilon);
     arg_parser.add_argument("--max_memory", "Maximum memory in GB", args.max_memory);
+    arg_parser.add_argument("--recursive", "Recursive Feynman", args.recursive);
     arg_parser.parse_known_args(argc, argv);
 
     if (args.circuit_file.empty()) {
@@ -68,6 +70,12 @@ int main(int argc, char* argv[]) {
         }
         // Feynman + Schrödinger simulator
         else {
+            fmt::print("Feynman simulator");
+            if (args.recursive == 1)
+                fmt::println(" (recursive)");
+            else 
+                fmt::println(" (flat)");
+                
             std::random_device dev;
             std::mt19937 rng(dev());
             int seed = rng();
@@ -83,7 +91,11 @@ int main(int argc, char* argv[]) {
                 Kokkos::View<size_t*> bitstrings("bitstrings", 1ull << circuit.num_qubits);
                 Kokkos::parallel_for(bitstrings.extent(0), KOKKOS_LAMBDA(size_t i) { bitstrings(i) = i; });
 
-                auto wave = simulator.run_flat(bitstrings, args.fidelity, args.verbose);
+                Kokkos::View<cmplx*> wave;
+                if (args.recursive == 1)
+                    wave = simulator.run(bitstrings, args.fidelity, args.verbose);
+                else
+                    wave = simulator.run_flat(bitstrings, args.fidelity, args.verbose);
 
                 StateVector vector;
                 vector.num_qubits = circuit.num_qubits;
@@ -146,7 +158,11 @@ int main(int argc, char* argv[]) {
                     });
 
                     // Running the actual simulation on Feynman paths
-                    auto wave = simulator.run_flat(bitstrings, args.fidelity, args.verbose);
+                    Kokkos::View<cmplx*> wave;
+                    if (args.recursive)
+                        wave = simulator.run(bitstrings, args.fidelity, args.verbose);
+                    else
+                        wave = simulator.run_flat(bitstrings, args.fidelity, args.verbose);
 
                     auto accepted_counter = Kokkos::View<size_t*>("incr", 1); // Accepted counter
                     // Accept or reject bitstrings with probability min(1, |psi|^2 N / M)
@@ -218,7 +234,7 @@ int main(int argc, char* argv[]) {
                 });
 
                 // Running the actual simulation on Feynman paths
-                amplitudes = simulator.run_flat(bitstrings, args.fidelity, args.verbose);
+                amplitudes = simulator.run(bitstrings, args.fidelity, args.verbose);
                 fmt::println("Total time: {}", print_time(timer.seconds()));
 
                 SampleVector vector{ circuit.num_qubits, bitstrings, amplitudes };

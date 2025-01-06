@@ -16,6 +16,7 @@ struct Arguments {
     int nbitstrings = -1;
     double epsilon = 5e-4;
     int use_feynman = 0;
+    bool use_rejection = true;
     int cut_at = -1;
     double fidelity = 1.0;
     size_t max_memory = 16; // in GB
@@ -33,6 +34,7 @@ int main(int argc, char* argv[]) {
     arg_parser.add_argument("--cut_at", "Cut the circuit at a specific qubit (if not specified, automatic)", args.cut_at);
     arg_parser.add_argument("--fidelity", "Fidelity of the Feynman simulator", args.fidelity);
     arg_parser.add_argument("--nbitstrings", "Number of bitstrings (-1 for full vector)", args.nbitstrings);
+    arg_parser.add_argument("--use_rejection", "Use rejection sampling", args.use_rejection);
     arg_parser.add_argument("--epsilon", "Epsilon for fidelity of sampling", args.epsilon);
     arg_parser.add_argument("--max_memory", "Maximum memory in GB", args.max_memory);
     arg_parser.parse_known_args(argc, argv);
@@ -96,7 +98,7 @@ int main(int argc, char* argv[]) {
                     out << print_probabilities(vector);
                 }
             }
-            else {
+            else if (args.use_rejection) {
                 // Implement frugal rejection sampling, from Google's article arXiv:1807.10749v3
                 /**
                  * Find M' such that 2exp(-M'/(1-exp(-M'))) < epsilon
@@ -112,10 +114,6 @@ int main(int argc, char* argv[]) {
                 }
 
                 fmt::println("Seed: {}", seed);
-
-                // Final results
-                // kokkos maps are restricted to uint32_t keys, not useful
-                // Kokkos::UnorderedMap<size_t, int> amplitude_map(args.nbitstrings * 2);
 
                 Kokkos::View<size_t*> accepted_bitstrings("accepted_bitstrings", args.nbitstrings * 2);
                 Kokkos::View<cmplx*> accepted_amplitude("accepted_amplitude", args.nbitstrings * 2);
@@ -143,7 +141,7 @@ int main(int argc, char* argv[]) {
                             bit = generator.rand64() % N;
                         }
                         bitset_map_tmp.insert(bit, 1);
-                        random_pool.free_state(generator);  
+                        random_pool.free_state(generator);
                         bitstrings(i) = bit;
                     });
 
@@ -189,7 +187,41 @@ int main(int argc, char* argv[]) {
                     bitstrings(i) = accepted_bitstrings(i);
                 });
 
-                SampleVector vector{circuit.num_qubits, bitstrings, amplitudes};
+                SampleVector vector{ circuit.num_qubits, bitstrings, amplitudes };
+
+                if (!args.output_statevector.empty()) {
+                    std::ofstream out(args.output_statevector);
+                    out << print_samplevector(vector);
+                }
+            }
+            else {
+                Kokkos::Timer timer;
+                fmt::println("Seed: {}", seed);
+
+                Kokkos::View<size_t*> bitstrings("bitstrings", args.nbitstrings);
+                Kokkos::View<cmplx*> amplitudes("amplitudes", args.nbitstrings);
+
+                size_t N = 1ull << circuit.num_qubits;
+                Kokkos::Random_XorShift64_Pool<> random_pool((size_t)seed);
+
+                // Generate m*l distinct bitstrings
+                Kokkos::UnorderedMap<size_t, int> bitset_map_tmp(args.nbitstrings * 2);
+                Kokkos::parallel_for("generate_bitstrings", bitstrings.extent(0), KOKKOS_LAMBDA(size_t i) {
+                    auto generator = random_pool.get_state();
+                    size_t bit = generator.rand64() % N;
+                    while (bitset_map_tmp.exists(bit)) {
+                        bit = generator.rand64() % N;
+                    }
+                    bitset_map_tmp.insert(bit, 1);
+                    random_pool.free_state(generator);
+                    bitstrings(i) = bit;
+                });
+
+                // Running the actual simulation on Feynman paths
+                amplitudes = simulator.run_flat(bitstrings, args.fidelity, args.verbose);
+                fmt::println("Total time: {}", print_time(timer.seconds()));
+
+                SampleVector vector{ circuit.num_qubits, bitstrings, amplitudes };
 
                 if (!args.output_statevector.empty()) {
                     std::ofstream out(args.output_statevector);

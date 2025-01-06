@@ -1,4 +1,5 @@
 #pragma once
 #include "kokkos.h"
 
-using cmplx = Kokkos::complex<double>;
+typedef double precision;
+using cmplx = Kokkos::complex<precision>;

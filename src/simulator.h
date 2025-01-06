@@ -21,6 +21,12 @@ struct StateVector {
     Kokkos::View<cmplx*> wave;
 };
 
+struct SampleVector {
+    int num_qubits;
+    Kokkos::View<size_t*> bitstrings;
+    Kokkos::View<cmplx*> wave;
+};
+
 std::string print_statevector(const StateVector& vector, int first_N = -1) {
     Kokkos::fence();
     std::string out;
@@ -29,6 +35,44 @@ std::string print_statevector(const StateVector& vector, int first_N = -1) {
     Kokkos::deep_copy(wave_host, vector.wave);
     for (size_t i = 0; i < N; ++i) {
         out += fmt::format("{:0{}b}: {}\n", i, vector.num_qubits, wave_host(i));
+        if (first_N > 0 && i >= first_N) {
+            out += fmt::format("...\n");
+            break;
+        }
+    }
+    return out;
+}
+
+std::string print_samplevector(const SampleVector& vector, int first_N = -1) {
+    Kokkos::fence();
+    std::string out;
+    Kokkos::View<cmplx*, Kokkos::HostSpace> wave_host = Kokkos::create_mirror_view(vector.wave);
+    Kokkos::View<size_t*, Kokkos::HostSpace> bitstring_host = Kokkos::create_mirror_view(vector.bitstrings);
+    size_t N = vector.wave.extent(0);
+    Kokkos::deep_copy(wave_host, vector.wave);
+    Kokkos::deep_copy(bitstring_host, vector.bitstrings);
+    for (size_t i = 0; i < N; ++i) {
+        out += fmt::format("{:0{}b}: {}\n", bitstring_host(i), vector.num_qubits, wave_host(i));
+        if (first_N > 0 && i >= first_N) {
+            out += fmt::format("...\n");
+            break;
+        }
+    }
+    return out;
+}
+
+std::string print_probabilities(const StateVector& vector, int first_N = -1) {
+    Kokkos::fence();
+    std::string out;
+    Kokkos::View<precision*> probs("probs", vector.wave.extent(0));
+    Kokkos::parallel_for(vector.wave.extent(0), KOKKOS_LAMBDA(size_t idx) {
+        probs(idx) = Kokkos::abs(vector.wave(idx) * vector.wave(idx));
+    });
+    Kokkos::View<precision*, Kokkos::HostSpace> probs_host = Kokkos::create_mirror_view(probs);
+    size_t N = vector.wave.extent(0);
+    Kokkos::deep_copy(probs_host, probs);
+    for (size_t i = 0; i < N; ++i) {
+        out += fmt::format("{:0{}b}: {}\n", i, vector.num_qubits, probs(i));
         if (first_N > 0 && i >= first_N) {
             out += fmt::format("...\n");
             break;
@@ -214,7 +258,7 @@ struct SchrodingerSimulator {
 
     void initialise_state(bool hadamard = false) {
         if (hadamard) {
-            double factor = 1. / Kokkos::pow(Kokkos::sqrt(2), circuit.num_qubits);
+            precision factor = 1. / Kokkos::pow(Kokkos::sqrt(2), circuit.num_qubits);
             Kokkos::parallel_for(N, KOKKOS_CLASS_LAMBDA(size_t idx) { wave(idx) = 1.; });
             sqrt_counter = circuit.num_qubits;
         }
@@ -282,7 +326,7 @@ struct SchrodingerSimulator {
         }
 
         normalise();
-        
+
         if (verbose) {
             Kokkos::fence();
             fmt::println("Total time: {}", print_time(timer.seconds()));

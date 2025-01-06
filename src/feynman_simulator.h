@@ -18,7 +18,6 @@ KOKKOS_INLINE_FUNCTION cmplx get_amplitude(const Amplitude& wave_1, const Amplit
     return wave_1(idx_1) * wave_2(idx_2);
 }
 
-template<typename T>
 struct FeynmanSimulator {
     Circuit global_circuit;
     int cut_idx;
@@ -49,8 +48,8 @@ struct FeynmanSimulator {
         bool found = false;
         fmt::println("Finding optimal circuit cut that fits into memory");
         for (int i = 1;i < num_qubits;i++) {
-            size_t memory_1 = wave_function_memory_size<T>(i);
-            size_t memory_2 = wave_function_memory_size<T>(num_qubits - i);
+            size_t memory_1 = wave_function_memory_size<precision>(i);
+            size_t memory_2 = wave_function_memory_size<precision>(num_qubits - i);
             int num_xCZ = count_number_of_cross_CZ(i);
             if (memory_1 * 4 + memory_2 * 4 <= max_memory) {
                 found = true;
@@ -100,8 +99,8 @@ struct FeynmanSimulator {
     ) {
         if (level == num_xCZ) { // Last level (leaf in tree of paths)
             counter++;
-            std::uniform_real_distribution<double> dist(0.0, 1.0);
-            double r = dist(rng);
+            std::uniform_real_distribution<precision> dist(0.0, 1.0);
+            precision r = dist(rng);
             if (r > fidelity) { // Discard path with probability fidelity
                 return;
             }
@@ -242,8 +241,8 @@ struct FeynmanSimulator {
 
         Kokkos::Timer timer;
         for (size_t p = 0;p < num_paths;p++) {
-            std::uniform_real_distribution<double> dist(0.0, 1.0);
-            double r = dist(rng);
+            std::uniform_real_distribution<precision> dist(0.0, 1.0);
+            precision r = dist(rng);
             if (r > fidelity) { // Discard path with probability fidelity
                 continue;
             }

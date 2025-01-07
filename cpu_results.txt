@@ -1,0 +1,113 @@
+
+=====================
+Qiskit vs Schrodinger
+=====================
+Circuit: cz_v2/4x4/inst_4x4_10_0.txt
+Qiskit: 2.1290955543518066s
+Schrodinger: 0.20441s
+Speedup: 10.4
+Amplitudes are equal: True
+
+=====================
+Qiskit vs Schrodinger
+=====================
+Circuit: cz_v2/4x4/inst_4x4_10_1.txt
+Qiskit: 0.9338114261627197s
+Schrodinger: 0.20581s
+Speedup: 4.5
+Amplitudes are equal: True
+
+=====================
+Qiskit vs Schrodinger
+=====================
+Circuit: cz_v2/4x4/inst_4x4_15_0.txt
+Qiskit: 1.2151048183441162s
+Schrodinger: 0.32153s
+Speedup: 3.8
+Amplitudes are equal: True
+
+=====================
+Qiskit vs Schrodinger
+=====================
+Circuit: cz_v2/4x4/inst_4x4_15_1.txt
+Qiskit: 1.348897933959961s
+Schrodinger: 0.32058s
+Speedup: 4.2
+Amplitudes are equal: True
+
+=====================
+Qiskit vs Schrodinger
+=====================
+Circuit: cz_v2/4x4/inst_4x4_20_0.txt
+Qiskit: 1.661142349243164s
+Schrodinger: 0.44135s
+Speedup: 3.8
+Amplitudes are equal: True
+
+=====================
+Qiskit vs Schrodinger
+=====================
+Circuit: cz_v2/4x4/inst_4x4_20_1.txt
+Qiskit: 1.7464003562927246s
+Schrodinger: 0.42965s
+Speedup: 4.1
+Amplitudes are equal: True
+
+=====================
+Qiskit vs Schrodinger
+=====================
+Circuit: cz_v2/4x4/inst_4x4_25_0.txt
+Qiskit: 1.929654598236084s
+Schrodinger: 0.52401s
+Speedup: 3.7
+Amplitudes are equal: True
+
+=====================
+Qiskit vs Schrodinger
+=====================
+Circuit: cz_v2/4x4/inst_4x4_25_1.txt
+Qiskit: 2.076643228530884s
+Schrodinger: 0.5280900000000001s
+Speedup: 3.9
+Amplitudes are equal: True
+
+=================
+Qiskit vs Feynman
+=================
+Qiskit: 11.262004375457764s
+Number of samples: 100000 (out of 1048576)
+Feynman: 1.26s
+Speedup: 8.9
+Qiskit: 10110110100011100011: 5.7212e-05 / Feynman: 10110110100011100011: 5.7212e-05
+Qiskit: 11110100000111111111: 5.5071e-05 / Feynman: 11110100000111111111: 5.5071e-05
+Qiskit: 10101000111011111110: 5.4986e-05 / Feynman: 11110100000110111000: 5.4159e-05
+Qiskit: 11110100000110111000: 5.4159e-05 / Feynman: 10110110101111111111: 5.1345e-05
+Qiskit: 10110110100010100100: 5.2408e-05 / Feynman: 11111011111101000000: 4.8258e-05
+Qiskit: 10110110101111111111: 5.1345e-05 / Feynman: 11111011110001011100: 4.7443e-05
+Qiskit: 10111001011000011011: 5.0165e-05 / Feynman: 11110010101111100011: 4.6755e-05
+Qiskit: 11111011111101000000: 4.8258e-05 / Feynman: 11101010011110000101: 4.6664e-05
+Qiskit: 11111011111100000111: 4.8193e-05 / Feynman: 11110010101110100100: 4.6537e-05
+Qiskit: 10111001010001000000: 4.7485e-05 / Feynman: 11101010011111100010: 4.5754e-05
+Qiskit: 11100101100101111011: 4.7479e-05 / Feynman: 10110000001010111000: 4.5331e-05
+Qiskit: 11111011110001011100: 4.7443e-05 / Feynman: 10101000110111000100: 4.2284e-05
+Qiskit: 10110000001011111111: 4.7280e-05 / Feynman: 10100111000000100000: 4.2259e-05
+Qiskit: 11110010101111100011: 4.6755e-05 / Feynman: 11100101100100111100: 4.2138e-05
+Qiskit: 11101010011110000101: 4.6664e-05 / Feynman: 10111111110000000111: 4.1999e-05
+Qiskit: 11101100110111111110: 4.6643e-05 / Feynman: 1000011001111100011: 4.0839e-05
+Qiskit: 11110010101110100100: 4.6537e-05 / Feynman: 11100011000000111100: 4.0520e-05
+Qiskit: 11101010011111100010: 4.5754e-05 / Feynman: 10101000110111100010: 4.0334e-05
+Qiskit: 10110000000110100100: 4.5658e-05 / Feynman: 1100110100100: 4.0308e-05
+Qiskit: 10100111000001100111: 4.5438e-05 / Feynman: 10100111001100010110: 3.8650e-05
+
+=================
+Performance tests
+=================
+Circuit size: 4x5
+  Qiskit aer Statevector: 0.14983582496643066s
+  Schrodinger: 1.63s
+Circuit size: 5x5
+  Qiskit aer Statevector: 2.909163236618042s
+  Schrodinger: 38.21s
+Circuit size: 5x6
+  Qiskit aer Statevector: 114.60445475578308s
+  Schrodinger: 1385.18s

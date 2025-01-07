@@ -23,6 +23,11 @@ cmake .. -DKokkos_ENABLE_CUDA=ON
 
 # Results
 
+Please extract all the files in `GRCS/inst/cz_v2` or use the bash script
+```
+sh extract_circuits.sh
+```
+
 In root of git, simply:
 ```
 python results.py

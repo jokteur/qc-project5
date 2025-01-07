@@ -18,7 +18,6 @@ if (NOT TARGET fmt)
     add_subdirectory(external/fmt)
 endif()
 
-
 add_subdirectory(external/argparse)
 
 add_compile_options(-Wno-unused-local-typedefs -Wno-unused-parameter -static-libstdc++)

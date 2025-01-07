@@ -80,9 +80,9 @@ int main(int argc, char* argv[]) {
             fmt::print("Feynman simulator");
             if (args.recursive == 1)
                 fmt::println(" (recursive)");
-            else 
+            else
                 fmt::println(" (flat)");
-                
+
             std::random_device dev;
             std::mt19937 rng(dev());
             int seed = rng();
@@ -177,7 +177,7 @@ int main(int argc, char* argv[]) {
                         size_t bit = bitstrings(i);
                         cmplx amplitude = wave(i);
                         float probability = Kokkos::abs(amplitude * amplitude);
-                        float accept_probability = Kokkos::min(1.f, probability * N / M);
+                        float accept_probability = Kokkos::min(1.f, probability * N);
                         auto generator = random_pool.get_state();
                         bool accept = generator.drand() < accept_probability;
                         random_pool.free_state(generator);
@@ -241,14 +241,14 @@ int main(int argc, char* argv[]) {
                 });
 
                 // Running the actual simulation on Feynman paths
-                    Kokkos::View<cmplx*> wave;
-                    if (args.recursive)
-                        wave = simulator.run(bitstrings, args.fidelity, args.verbose);
-                    else
-                        wave = simulator.run_flat(bitstrings, args.fidelity, args.verbose);
+                Kokkos::View<cmplx*> wave;
+                if (args.recursive)
+                    wave = simulator.run(bitstrings, args.fidelity, args.verbose);
+                else
+                    wave = simulator.run_flat(bitstrings, args.fidelity, args.verbose);
                 fmt::println("Total time: {}", print_time(timer.seconds()));
 
-                SampleVector vector{ circuit.num_qubits, bitstrings, amplitudes };
+                SampleVector vector{ circuit.num_qubits, bitstrings, wave };
 
                 if (!args.output_statevector.empty()) {
                     std::ofstream out(args.output_statevector);

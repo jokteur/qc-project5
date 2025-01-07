@@ -332,7 +332,7 @@ struct FeynmanSimulator {
             Kokkos::fence();
             double time = path_timer.seconds();
             if (verbose) {
-                fmt::println("Path {} ({:.0f}%) , ETA {}", p, 100.0 * p / num_paths, print_time(time * (num_paths - p)));
+                fmt::println("Path {} ({:.0f}%) , ETA {}", p, 100.0 * p / num_paths, print_time(time * (num_paths - p) * fidelity));
             }
         }
         fmt::println("Simulating all paths: {}", print_time(timer.seconds()));

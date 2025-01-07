@@ -2,14 +2,27 @@ import os
 import subprocess
 import sys
 import matplotlib.pyplot as plt
-from qiskit import QuantumCircuit
+from qiskit import QuantumCircuit, transpile
 from qiskit.circuit.library import YGate
 from qiskit.quantum_info import Statevector
+from qiskit_aer import QasmSimulator, AerSimulator, StatevectorSimulator
 import numpy as np
 import time
 
+plt.rcParams.update({'font.size': 20})
+
 GRCS_folder = "GRCS/inst/rectangular/"
 
+qc_path = f"build/qc-simulator"
+if not os.path.exists(qc_path):
+    print("Error: qc-simulator not found. Please build the project first.")
+    sys.exit(1)
+
+out = subprocess.run(["./" + qc_path, "--help"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+if "CUDA" in out.stdout.decode("utf-8"):
+    GPU = True
+else:
+    GPU = False
 
 def try_mkdir(path):
     try:
@@ -76,12 +89,6 @@ def run_qcsimulator(
     """
     Run the QCSimulator on the GRCS folder
     """
-
-    qc_path = f"build/qc-simulator"
-    if not os.path.exists(qc_path):
-        print("Error: qc-simulator not found. Please build the project first.")
-        sys.exit(1)
-
     circuit_name = generate_circuit_name(circuit_size, circuit_ncycles, circuit_idx)
 
     if not os.path.exists(GRCS_folder + circuit_name):
@@ -91,12 +98,10 @@ def run_qcsimulator(
     try_mkdir("tmp")
     os.chdir("tmp")
 
-    logname = f"log_{circuit_size}_{circuit_ncycles}_{circuit_idx}_feynman{feynman}_out"
+    logname = f"log_{circuit_size}_{circuit_ncycles}_{circuit_idx}_feynman{feynman}_gpu{GPU}_out"
 
     with open(logname, "w") as outfile:
-        subprocess.run(
-            [
-                f"../{qc_path}",
+        program_args = " ".join([f"../{qc_path}",
                 "-c",
                 f"../{GRCS_folder}{circuit_name}",
                 "--fidelity",
@@ -111,10 +116,9 @@ def run_qcsimulator(
                 f"--output_probabilities={output_file}" if output_file else "",
                 "--use_feynman=1" if feynman else "",
                 f"--cut_at={cut_at}",
-                f"--use_rejection={int(use_rejection)}",
-            ],
-            stdout=outfile,
-        )
+                f"--use_rejection={int(use_rejection)}"])
+        
+        os.system(program_args + " > " + logname)
 
     execute_time = 0
     with open(logname, "r") as file:
@@ -155,8 +159,8 @@ def read_amplitudes_from_file(filename: str):
     return np.array(bitstrings), np.array(amplitudes)
 
 
-def porter_thomas_distribution(nqubits: int, bitstrings: np.array, amplitudes: np.array, fidelity):
-    probabilities = np.abs(amplitudes) ** 2 
+def porter_thomas_distribution(label:str, nqubits: int, bitstrings: np.array, amplitudes: np.array, fidelity):
+    probabilities = np.abs(amplitudes) ** 2 / fidelity
 
     N = 2**nqubits
 
@@ -165,11 +169,22 @@ def porter_thomas_distribution(nqubits: int, bitstrings: np.array, amplitudes: n
     hist, bin_edges = np.histogram(probabilities * N, bins=bins, density=True)
     x = np.linspace(0, np.max(bin_edges), 1000)
     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-    plt.semilogy(x, np.exp(-x), "-k", label="Porter-Thomas ideal")
-    plt.semilogy(bin_centers, hist, "-", linewidth=3)
+    plt.figure()
+    plt.semilogy(bin_centers, hist, "-", linewidth=3, label=label)
+    plt.semilogy(x, np.exp(-x), "--r", label="Porter-Thomas ideal")
     plt.xlim([0, 10])
-
-    plt.show()
+    if fidelity < 1:
+        plt.xlabel("Np/f")
+        plt.ylabel("Probability density")
+    else:
+        plt.xlabel("Np")
+        plt.ylabel("Probability density")
+    plt.legend(loc="upper right")
+    plt.tight_layout()
+    import re
+    label = re.sub(r'\W+', '', label)
+    plt.savefig(f"tmp/porter_thomas_{label}.png")
+    # plt.show()
 
     return bitstrings, probabilities
 
@@ -227,12 +242,53 @@ def test_qiskit_vs_feynman():
         print(f"Qiskit: {j:b}: {prob[j]:.4e} / Feynman: {bitstrings[i]:b}: {probabilities[i]:.4e}")
 
 
+def performance_tests():
+    print_header("Performance tests")
+
+    circuit_size = ["4x5", "5x5"]
+    if not GPU:
+        circuit_size.append("5x6")
+    circuit_ncycles = 27
+    circuit_idx = 5
+
+    for size in circuit_size:
+        print(f"Circuit size: {size}")
+        qc = generate_circuit_qiskit(size, 10, 0)
+        qc.measure_all()
+        simulator = StatevectorSimulator(device="CPU")
+        circ = transpile(qc, simulator)
+        t = time.time()
+        simulator.run(circ).result()
+        t_qiskit = time.time() - t
+        print(f"  Qiskit aer Statevector: {t_qiskit}s")
+
+        t_schr = run_qcsimulator(size, circuit_ncycles, circuit_idx, False)
+        print(f"  Schrodinger: {t_schr}s")
+
+def test_thomas_portman():
+    print_header("Thomas Portman distribution")
+    f = 1
+    depth = 34
+    size = "4x5"
+    nqubits = np.cumprod([int(s) for s in size.split("x")])[-1]
+    run_qcsimulator(size, 34, 0, False, output_file="vector.txt", max_memory=12)
+    bitstrings, amplitudes = read_amplitudes_from_file("tmp/vector.txt")
+    porter_thomas_distribution(f"{size}, depth {depth}", nqubits, bitstrings, amplitudes, f)
+
+    # Now run a bigger circuit, with fidelity
+    oneOverF = 64
+    f = 1/oneOverF
+    size = "6x7"
+    depth = 27
+    nqubits = np.cumprod([int(s) for s in size.split("x")])[-1]
+    # run_qcsimulator(size, depth, 0, True, nbitstrings=1000000, use_rejection=False, fidelity=f, output_file="vector_6x7.txt", max_memory=12)
+    bitstrings, amplitudes = read_amplitudes_from_file("tmp/vector_6x7.txt")
+
+    porter_thomas_distribution(f"{size}, depth {depth}, f=1/{oneOverF}", nqubits, bitstrings, amplitudes, f)
+
 # Please uncomment to run the different tests and results
 # test_qiskit_vs_schrodinger()
 # test_qiskit_vs_feynman()
-
-
-f = 0.1
-run_qcsimulator("6x6", 27, 0, True, nbitstrings=1000000, use_rejection=False, fidelity=f, output_file="vector.txt")
-bitstrings, amplitudes = read_amplitudes_from_file("tmp/vector.txt")
-porter_thomas_distribution(25, bitstrings, amplitudes, f)
+performance_tests()
+if GPU:
+    test_thomas_portman()

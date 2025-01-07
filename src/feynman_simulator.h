@@ -67,7 +67,7 @@ struct FeynmanSimulator {
 
         fmt::println("Optimal cut idx: {} with {} xCZ. Circuit size left: {}. Circuit size right: {}",
             optimal_cut, max_num_xCZ, optimal_cut, num_qubits - optimal_cut);
-        num_paths = 1 << max_num_xCZ;
+        num_paths = 1ull << max_num_xCZ;
         num_xCZ = max_num_xCZ;
         fmt::println("Number of Feynman paths: {}", num_paths);
         return optimal_cut;
@@ -78,10 +78,11 @@ struct FeynmanSimulator {
         if (cut_at >= 0) {
             cut_idx = cut_at;
             num_xCZ = count_number_of_cross_CZ(cut_idx);
-            num_paths = 1 << num_xCZ;
+            num_paths = 1ull << num_xCZ;
         }
         else {
             cut_idx = find_optimal_cut();
+            num_paths = 1ull << num_xCZ;
         }
 
         N1 = 1ull << cut_idx;
@@ -321,10 +322,6 @@ struct FeynmanSimulator {
                 }
             }
 
-            double time = path_timer.seconds();
-            if (verbose) {
-                fmt::println("Path {} ({:.0f}%) , ETA {}", p, 100.0 * p / num_paths, print_time(time * (num_paths - p)));
-            }
             sim_1.normalise();
             sim_2.normalise();
             Kokkos::parallel_for(bitstrings.extent(0), KOKKOS_CLASS_LAMBDA(size_t i) {
@@ -332,9 +329,11 @@ struct FeynmanSimulator {
                 auto ampl = get_amplitude(sim_1.wave, sim_2.wave, num_qubits, cut_idx, idx);
                 global_wave(i) += ampl;
             });
-            // fmt::println("sim_1: {}", print_statevector(sim_1.get_statevector(), 20));
-            // fmt::println("sim_2: {}", print_statevector(sim_2.get_statevector(), 20));
-            // fmt::println("global_wave: {}", print_statevector({num_qubits, global_wave}, 20));
+            Kokkos::fence();
+            double time = path_timer.seconds();
+            if (verbose) {
+                fmt::println("Path {} ({:.0f}%) , ETA {}", p, 100.0 * p / num_paths, print_time(time * (num_paths - p)));
+            }
         }
         fmt::println("Simulating all paths: {}", print_time(timer.seconds()));
         return global_wave;

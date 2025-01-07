@@ -24,6 +24,12 @@ struct Arguments {
 };
 
 int main(int argc, char* argv[]) {
+#ifdef KOKKOS_ENABLE_CUDA
+    fmt::println("Using CUDA");
+#else
+    fmt::println("Using OpenMP");
+#endif
+
     Arguments args;
 
     Parser arg_parser("Quantum Simulator", "0.1");
@@ -46,6 +52,7 @@ int main(int argc, char* argv[]) {
         arg_parser.print_help();
         return 1;
     }
+
 
     Kokkos::initialize(argc, argv);
     {
@@ -234,7 +241,11 @@ int main(int argc, char* argv[]) {
                 });
 
                 // Running the actual simulation on Feynman paths
-                amplitudes = simulator.run(bitstrings, args.fidelity, args.verbose);
+                    Kokkos::View<cmplx*> wave;
+                    if (args.recursive)
+                        wave = simulator.run(bitstrings, args.fidelity, args.verbose);
+                    else
+                        wave = simulator.run_flat(bitstrings, args.fidelity, args.verbose);
                 fmt::println("Total time: {}", print_time(timer.seconds()));
 
                 SampleVector vector{ circuit.num_qubits, bitstrings, amplitudes };

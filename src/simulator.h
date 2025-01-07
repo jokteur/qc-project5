@@ -102,7 +102,7 @@ struct SchrodingerSimulator {
      * When we apply the gate to a target k qubit, the following matrix is
      * applied:
      *
-     *      k - 1       k    n - k - 1
+     *        k         k    n - k - 1
      *  /           \   |   /         \
      *  I x I x ... I x G x I x ... x I
      *

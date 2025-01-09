@@ -103,10 +103,10 @@ Qiskit: 10100111000001100111: 4.5438e-05 / Feynman: 10110110101110111000: 3.8453
 Performance tests
 =================
 Circuit size: 4x5
-  Qiskit aer Statevector: 0.15320920944213867s
+  Qiskit aer Statevector: 0.06488418579101562s
   Schrodinger: 0.01495s
 Circuit size: 5x5
-  Qiskit aer Statevector: 2.9063029289245605s
+  Qiskit aer Statevector: 2.5684216022491455s
   Schrodinger: 0.56337s
 
 ===========================

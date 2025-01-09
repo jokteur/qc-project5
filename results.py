@@ -255,15 +255,15 @@ def performance_tests():
         print(f"Circuit size: {size}")
         qc = generate_circuit_qiskit(size, 10, 0)
         qc.measure_all()
-        simulator = StatevectorSimulator(device="CPU")
+        simulator = StatevectorSimulator(device="GPU" if GPU else "CPU")
         circ = transpile(qc, simulator)
         t = time.time()
         simulator.run(circ).result()
         t_qiskit = time.time() - t
         print(f"  Qiskit aer Statevector: {t_qiskit}s")
 
-        t_schr = run_qcsimulator(size, circuit_ncycles, circuit_idx, False)
-        print(f"  Schrodinger: {t_schr}s")
+        #t_schr = run_qcsimulator(size, circuit_ncycles, circuit_idx, False)
+        #print(f"  Schrodinger: {t_schr}s")
 
 def test_thomas_portman():
     print_header("Thomas Portman distribution")
@@ -291,4 +291,4 @@ def test_thomas_portman():
 # test_qiskit_vs_feynman()
 performance_tests()
 if GPU:
-    test_thomas_portman()
+    pass #test_thomas_portman()
